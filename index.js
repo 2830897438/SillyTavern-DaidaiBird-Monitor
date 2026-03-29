@@ -200,13 +200,16 @@ async function fetchUserKeys() {
             if (data.code !== 200 || !Array.isArray(data.msg)) break;
 
             for (const order of data.msg) {
-                if (order.key && typeof order.key === 'string' && order.key.startsWith('sk-')) {
+                const apiKey = order.api_key;
+                if (apiKey && typeof apiKey === 'string' && apiKey.startsWith('sk-')) {
                     // 避免重复
-                    if (!userKeys.some(k => k.key === order.key)) {
+                    if (!userKeys.some(k => k.key === apiKey)) {
                         userKeys.push({
-                            key: order.key,
-                            name: order.name || order.payPackage || '',
-                            date: order.createdAt || order.date || '',
+                            key: apiKey,
+                            balance: order.balance || '0',
+                            utilised: order.utilised || '0',
+                            time: order.time || '',
+                            state: order.state || '',
                         });
                     }
                 }
@@ -379,7 +382,7 @@ function updateKeySelect() {
 
     for (const keyInfo of userKeys) {
         const shortKey = keyInfo.key.substring(0, 8) + '...' + keyInfo.key.substring(keyInfo.key.length - 6);
-        const label = keyInfo.name ? `${shortKey} (${keyInfo.name})` : shortKey;
+        const label = `${shortKey} (余额:￥${keyInfo.balance})`;
         const selected = settings.selectedKey === keyInfo.key ? 'selected' : '';
         $select.append(`<option value="${keyInfo.key}" ${selected}>${label}</option>`);
     }
@@ -627,11 +630,18 @@ jQuery(async () => {
     });
 
     // === Key 管理 ===
-    $('#ddb_key_select').on('change', async function () {
+    $('#ddb_key_select').on('change', function () {
         const key = $(this).val();
         extension_settings[extensionName].selectedKey = key;
         saveSettingsDebounced();
-        await updateQuotaDisplay(key);
+
+        const $quota = $('#ddb_key_quota');
+        if (!key) { $quota.text(''); return; }
+
+        const keyInfo = userKeys.find(k => k.key === key);
+        if (keyInfo) {
+            $quota.html(`余额: <b style="color:#4caf50">￥${keyInfo.balance}</b> | 已用: ￥${keyInfo.utilised}`);
+        }
     });
 
     $('#ddb_apply_key_btn').on('click', function () {
