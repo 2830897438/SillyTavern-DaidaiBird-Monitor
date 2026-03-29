@@ -1,33 +1,15 @@
-/* DaidaiBird Monitor - Error rate indicator styles */
+/* DaidaiBird Monitor - Settings & UI styles */
 
-.ddb-error-rate {
-    font-size: 0.85em;
-    margin-left: 4px;
+.ddb-monitor-settings .ddb-settings-group {
+    margin-bottom: 8px;
 }
 
-.ddb-error-low {
-    color: #4caf50;
+.ddb-monitor-settings .ddb-settings-group label {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 0.9em;
 }
 
-.ddb-error-medium {
-    color: #ff9800;
-}
-
-.ddb-error-high {
-    color: #f44336;
-}
-
-#ddb_monitor_status {
-    font-size: 0.85em;
-    padding: 2px 6px;
-    margin-left: 5px;
-    border-radius: 3px;
-}
-
-#ddb_monitor_status.active {
-    color: #4caf50;
-}
-
-#ddb_monitor_status.inactive {
-    color: #999;
+.ddb-monitor-settings .text_pole {
+    width: 100%;
 }
