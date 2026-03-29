@@ -222,11 +222,12 @@ function findPricing(modelId) {
 }
 
 /**
- * 格式化报错率
+ * 格式化可用率（100% - 报错率）
  */
-function formatErrorRate(rate) {
-    if (rate === 0) return '0%';
-    return rate.toFixed(1) + '%';
+function formatAvailability(errorRate) {
+    const availability = 100 - errorRate;
+    if (availability >= 100) return '100%';
+    return availability.toFixed(1) + '%';
 }
 
 /**
@@ -294,7 +295,7 @@ function updateModelSelectDisplay() {
                 if (hasMonitor) {
                     const errorRate = findErrorRate(modelId);
                     if (errorRate !== null) {
-                        parts.push(`报错:${formatErrorRate(errorRate)}`);
+                        parts.push(`可用:${formatAvailability(errorRate)}`);
                     }
                 }
 
@@ -452,7 +453,7 @@ function getSettingsHtml() {
                 <div class="ddb-settings-group">
                     <label class="checkbox_label">
                         <input id="ddb_show_error_rate" type="checkbox" ${settings.showErrorRate ? 'checked' : ''} />
-                        <span>显示报错率</span>
+                        <span>显示可用率</span>
                     </label>
                 </div>
                 <div class="ddb-settings-group">
