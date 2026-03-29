@@ -1,0 +1,12 @@
+{
+    "display_name": "DaidaiBird Monitor",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "DaidaiBird",
+    "version": "1.0.0",
+    "homePage": "https://github.com/SillyTavern/SillyTavern-DaidaiBird-Monitor",
+    "auto_update": true
+}
