@@ -237,10 +237,13 @@ function formatPrice(pricing) {
     if (!pricing) return '';
 
     const num = parseFloat(pricing.num);
+    const basePrice = parseFloat(pricing.price) || 0;
+
     if (pricing.is_price === '1' || pricing.is_price === 1) {
-        // 固定价格模式：num 是每次调用的倍率
-        if (num > 0) {
-            return `¥${num}/次`;
+        // 固定价格模式：实际价格 = num × price
+        if (num > 0 && basePrice > 0) {
+            const realPrice = (num * basePrice).toFixed(2).replace(/\.?0+$/, '');
+            return `¥${realPrice}/次`;
         }
         return '';
     } else {
