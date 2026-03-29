@@ -16,6 +16,7 @@ const URL_KEYWORD = 'daidaibird';
 let monitorData = new Map(); // modelName -> latestWeightedErrorRate
 let pollTimer = null;
 let isActive = false;
+let isUpdating = false; // 防重入锁
 
 /**
  * 从监控 API 获取数据并缓存
@@ -82,15 +83,6 @@ function findErrorRate(modelId) {
 }
 
 /**
- * 获取报错率等级对应的 CSS 类名
- */
-function getErrorRateClass(rate) {
-    if (rate <= 2) return 'ddb-error-low';
-    if (rate <= 10) return 'ddb-error-medium';
-    return 'ddb-error-high';
-}
-
-/**
  * 格式化报错率显示文本
  */
 function formatErrorRate(rate) {
@@ -103,37 +95,45 @@ function formatErrorRate(rate) {
  * 只修改 option 的显示文本(text)，不修改 value（确保传给 API 的是原始模型名）
  */
 function updateModelSelectDisplay() {
-    if (!isActive || monitorData.size === 0) return;
+    if (!isActive || monitorData.size === 0 || isUpdating) return;
 
-    const selectors = [
-        '.model_custom_select',
-        '#model_custom_select',
-    ];
+    isUpdating = true;
 
-    for (const selector of selectors) {
-        const $select = $(selector);
-        if (!$select.length) continue;
+    try {
+        const selectors = [
+            '.model_custom_select',
+            '#model_custom_select',
+        ];
 
-        $select.find('option').each(function () {
-            const $option = $(this);
-            const modelId = $option.val();
-            if (!modelId) return;
+        for (const selector of selectors) {
+            const $select = $(selector);
+            if (!$select.length) continue;
 
-            // 先还原为原始模型名（去掉之前可能追加的报错率）
-            let originalText = modelId;
+            $select.find('option').each(function () {
+                const $option = $(this);
+                const modelId = $option.val();
+                if (!modelId) return;
 
-            const errorRate = findErrorRate(modelId);
-            if (errorRate !== null) {
-                const rateText = formatErrorRate(errorRate);
-                const rateClass = getErrorRateClass(errorRate);
-                // 在显示文本后追加报错率（纯文本，因为 <option> 不支持 HTML）
-                $option.text(`${originalText} [报错: ${rateText}]`);
-                // 用 data 属性记录，方便后续使用
-                $option.data('ddb-error-rate', errorRate);
-            } else {
-                $option.text(originalText);
-            }
-        });
+                // value 就是原始模型名
+                const originalText = modelId;
+
+                const errorRate = findErrorRate(modelId);
+                if (errorRate !== null) {
+                    const rateText = formatErrorRate(errorRate);
+                    const newText = `${originalText} [报错: ${rateText}]`;
+                    // 只在文本不同时才更新，避免不必要的 DOM 操作
+                    if ($option.text() !== newText) {
+                        $option.text(newText);
+                    }
+                } else {
+                    if ($option.text() !== originalText) {
+                        $option.text(originalText);
+                    }
+                }
+            });
+        }
+    } finally {
+        isUpdating = false;
     }
 }
 
@@ -142,21 +142,15 @@ function updateModelSelectDisplay() {
  */
 function checkCustomUrl() {
     try {
-        // 尝试从 DOM 获取 Custom URL 输入框的值
         const customUrlInput = $('#custom_api_url_text');
         if (customUrlInput.length) {
             const url = customUrlInput.val();
             return url && url.toLowerCase().includes(URL_KEYWORD);
         }
 
-        // 备选：通过 oai_settings
-        const context = getContext();
-        if (context && context.extensionSettings) {
-            // 尝试从全局获取 oai_settings
-            const oaiSettings = window.oai_settings;
-            if (oaiSettings && oaiSettings.custom_url) {
-                return oaiSettings.custom_url.toLowerCase().includes(URL_KEYWORD);
-            }
+        const oaiSettings = window.oai_settings;
+        if (oaiSettings && oaiSettings.custom_url) {
+            return oaiSettings.custom_url.toLowerCase().includes(URL_KEYWORD);
         }
     } catch (e) {
         console.warn('[DDB Monitor] 检查 URL 失败:', e);
@@ -177,7 +171,7 @@ async function startMonitoring() {
         updateModelSelectDisplay();
     }
 
-    // 设置定时轮询
+    // 设置定时轮询，每5分钟刷新一次
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(async () => {
         if (!checkCustomUrl()) {
@@ -204,13 +198,18 @@ function stopMonitoring() {
     monitorData.clear();
 
     // 还原模型列表显示
-    const selectors = ['.model_custom_select', '#model_custom_select'];
-    for (const selector of selectors) {
-        $(selector).find('option').each(function () {
-            const $option = $(this);
-            const modelId = $option.val();
-            if (modelId) $option.text(modelId);
-        });
+    isUpdating = true;
+    try {
+        const selectors = ['.model_custom_select', '#model_custom_select'];
+        for (const selector of selectors) {
+            $(selector).find('option').each(function () {
+                const $option = $(this);
+                const modelId = $option.val();
+                if (modelId) $option.text(modelId);
+            });
+        }
+    } finally {
+        isUpdating = false;
     }
 }
 
@@ -223,9 +222,6 @@ async function checkAndToggle() {
         await startMonitoring();
     } else if (!shouldBeActive && isActive) {
         stopMonitoring();
-    } else if (shouldBeActive && isActive) {
-        // 已激活，刷新显示
-        updateModelSelectDisplay();
     }
 }
 
@@ -243,55 +239,31 @@ jQuery(async () => {
         };
     }
 
-    // 监听 API source 变更
+    // 监听 API source 变更（切换 API 类型时触发）
     eventSource.on(event_types.CHATCOMPLETION_SOURCE_CHANGED, async () => {
-        // 延迟等待模型列表加载完成
-        await new Promise(r => setTimeout(r, 1500));
-        await checkAndToggle();
-    });
-
-    // 监听模型列表变更（模型加载完成后更新显示）
-    eventSource.on(event_types.CHATCOMPLETION_MODEL_CHANGED, () => {
-        if (isActive) {
-            setTimeout(() => updateModelSelectDisplay(), 500);
-        }
-    });
-
-    // 监听 Custom URL 输入框变化
-    $(document).on('change input', '#custom_api_url_text', async () => {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 2000));
         await checkAndToggle();
     });
 
     // 监听 "Connect" 按钮点击（模型列表在连接后刷新）
     $(document).on('click', '#api_button_openai', async () => {
-        await new Promise(r => setTimeout(r, 3000)); // 等待连接和模型列表加载
-        await checkAndToggle();
+        await new Promise(r => setTimeout(r, 3000));
+        if (isActive) {
+            updateModelSelectDisplay();
+        } else {
+            await checkAndToggle();
+        }
     });
 
-    // 使用 MutationObserver 监控模型列表 DOM 变化
-    const observeModelSelect = () => {
-        const selectors = ['.model_custom_select', '#model_custom_select'];
-        for (const selector of selectors) {
-            const el = $(selector)[0];
-            if (!el) continue;
-
-            const observer = new MutationObserver(() => {
-                if (isActive) {
-                    // 去抖动
-                    clearTimeout(observer._ddbTimeout);
-                    observer._ddbTimeout = setTimeout(() => updateModelSelectDisplay(), 300);
-                }
-            });
-
-            observer.observe(el, { childList: true, subtree: true });
-        }
-    };
+    // 监听 Custom URL 输入框变化
+    $(document).on('change', '#custom_api_url_text', async () => {
+        await new Promise(r => setTimeout(r, 500));
+        await checkAndToggle();
+    });
 
     // APP_READY 时进行初始检查
     if (event_types.APP_READY) {
         eventSource.on(event_types.APP_READY, async () => {
-            observeModelSelect();
             await new Promise(r => setTimeout(r, 2000));
             await checkAndToggle();
         });
@@ -299,7 +271,6 @@ jQuery(async () => {
 
     // 延迟初始检查（兼容 APP_READY 不触发的情况）
     setTimeout(async () => {
-        observeModelSelect();
         await checkAndToggle();
     }, 5000);
 
