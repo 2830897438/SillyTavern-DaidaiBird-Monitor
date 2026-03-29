@@ -13,3 +13,20 @@
 .ddb-monitor-settings .text_pole {
     width: 100%;
 }
+
+.ddb-monitor-settings h4 {
+    margin: 8px 0 4px 0;
+    font-size: 0.95em;
+    color: #ccc;
+}
+
+.ddb-monitor-settings hr {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    margin: 10px 0;
+}
+
+.ddb-monitor-settings .menu_button {
+    font-size: 0.85em;
+    padding: 4px 10px;
+}
